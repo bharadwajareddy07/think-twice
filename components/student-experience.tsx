@@ -287,53 +287,51 @@ export function StudentExperience() {
     }
   }
 
-  // 4. Begin Competition (SAFE FETCH: Exclude correct_option from student client payload)
+  // 4. Begin Competition (100% Admin-Controlled Questions from Supabase)
   async function beginCompetition() {
     if (!supabase || !player) return
     setSubmitting(true)
 
     try {
-      // 1. Fetch Questions WITHOUT correct_option
+      // Fetch Admin-created questions from Supabase
       const { data: dbQuestions } = await supabase
         .from('questions')
-        .select('id, question_text, prompt, think_twice_prompt, options, time_limit, position')
+        .select('id, question_text, prompt, think_twice_prompt, options, correct_option, explanation, time_limit, position')
         .order('position', { ascending: true })
 
       const loadedQuestions: Question[] = (dbQuestions && dbQuestions.length > 0)
-        ? dbQuestions.map((q: Partial<Question>) => ({
-            id: q.id || '',
-            question_text: q.question_text || q.prompt || 'Question',
-            prompt: q.prompt,
-            think_twice_prompt: q.think_twice_prompt || 'Pause and reconsider your initial response. Are you certain?',
-            options: Array.isArray(q.options) ? q.options : [],
-            correct_option: '', // Secret: Excluded until reveal phase!
-            time_limit: q.time_limit || 30,
-            position: q.position || 1,
-          }))
-        : [
-            {
-              id: 'q1',
-              question_text: 'Which planet in our solar system has the most moons?',
-              prompt: 'Which planet in our solar system has the most moons?',
-              think_twice_prompt: 'You might remember Jupiter, but recent astronomical discoveries updated Saturn\'s total count. Are you sure?',
-              options: ['Jupiter', 'Saturn', 'Neptune', 'Uranus'],
-              correct_option: '',
-              time_limit: 30,
-              position: 1,
-            },
-            {
-              id: 'q2',
-              question_text: 'What is the speed of light in vacuum approximately?',
-              prompt: 'What is the speed of light in vacuum approximately?',
-              think_twice_prompt: 'Consider whether the value is in km/s or m/s!',
-              options: ['300,000 km/s', '150,000 km/s', '3,000,000 km/s', '30,000 km/s'],
-              correct_option: '',
-              time_limit: 25,
-              position: 2,
-            },
-          ]
+        ? dbQuestions.map((q: Partial<Question> & { options: unknown }) => {
+            let opts: string[] = []
+            if (Array.isArray(q.options)) {
+              opts = q.options.map(String)
+            } else if (typeof q.options === 'string') {
+              try {
+                opts = JSON.parse(q.options)
+              } catch {
+                opts = []
+              }
+            }
+
+            return {
+              id: q.id || '',
+              question_text: q.question_text || q.prompt || 'Question',
+              prompt: q.prompt,
+              think_twice_prompt: q.think_twice_prompt || 'Pause and reconsider your initial response. Are you certain?',
+              options: opts,
+              correct_option: q.correct_option || '',
+              explanation: q.explanation || '',
+              time_limit: q.time_limit || 30,
+              position: q.position || 1,
+            }
+          })
+        : []
 
       setQuestions(loadedQuestions)
+
+      if (loadedQuestions.length === 0) {
+        setRegError('No questions have been published by the Admin for this competition yet. Please contact the Admin.')
+        return
+      }
 
       const compId = competitionId || 'default-competition'
       let session = gameSession

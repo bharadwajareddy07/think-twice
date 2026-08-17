@@ -335,8 +335,8 @@ BEGIN
         RAISE EXCEPTION 'Question not found.';
     END IF;
 
-    v_is_first_correct := (p_first_answer = v_question_record.correct_option);
-    v_is_correct := (p_final_answer = v_question_record.correct_option);
+    v_is_first_correct := (TRIM(LOWER(p_first_answer)) = TRIM(LOWER(v_question_record.correct_option)));
+    v_is_correct := (TRIM(LOWER(p_final_answer)) = TRIM(LOWER(v_question_record.correct_option)));
     v_changed_answer := (p_first_answer <> p_final_answer);
     v_changed_to_correct := (v_changed_answer AND NOT v_is_first_correct AND v_is_correct);
     v_changed_to_wrong := (v_changed_answer AND v_is_first_correct AND NOT v_is_correct);
