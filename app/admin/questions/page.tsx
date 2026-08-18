@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { ArrowLeft, Plus, RefreshCw, Trash2, Eye } from 'lucide-react'
+import { ArrowLeft, Plus, RefreshCw, Trash2, Eye, Edit3 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { Question } from '@/lib/types'
@@ -28,6 +28,7 @@ export default function AdminQuestionsPage() {
   const [questions, setQuestions] = useState<Question[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [previewQuestion, setPreviewQuestion] = useState<Question | null>(null)
@@ -39,7 +40,7 @@ export default function AdminQuestionsPage() {
   const [optionB, setOptionB] = useState('')
   const [optionC, setOptionC] = useState('')
   const [optionD, setOptionD] = useState('')
-  const [correctOption, setCorrectOption] = useState('A')
+  const [correctOptionIndex, setCorrectOptionIndex] = useState('0') // 0 = A, 1 = B, 2 = C, 3 = D
   const [explanation, setExplanation] = useState('')
   const [timeLimit, setTimeLimit] = useState('30')
   const [position, setPosition] = useState('1')
@@ -58,20 +59,32 @@ export default function AdminQuestionsPage() {
       if (fetchErr) throw fetchErr
 
       const typedData = (data as DbQuestionRow[] | null) ?? []
-      const formatted: Question[] = typedData.map((q: DbQuestionRow) => ({
-        id: q.id,
-        question_text: q.question_text,
-        prompt: q.prompt,
-        think_twice_prompt: q.think_twice_prompt,
-        options: Array.isArray(q.options) ? (q.options as string[]) : [],
-        correct_option: q.correct_option,
-        explanation: q.explanation,
-        difficulty: q.difficulty,
-        category: q.category,
-        time_limit: q.time_limit,
-        position: q.position,
-        created_at: q.created_at,
-      }))
+      const formatted: Question[] = typedData.map((q: DbQuestionRow) => {
+        let opts: string[] = []
+        if (Array.isArray(q.options)) {
+          opts = q.options.map(String)
+        } else if (typeof q.options === 'string') {
+          try {
+            opts = JSON.parse(q.options)
+          } catch {
+            opts = []
+          }
+        }
+        return {
+          id: q.id,
+          question_text: q.question_text || q.prompt || 'Question',
+          prompt: q.prompt,
+          think_twice_prompt: q.think_twice_prompt,
+          options: opts,
+          correct_option: q.correct_option,
+          explanation: q.explanation,
+          difficulty: q.difficulty,
+          category: q.category,
+          time_limit: q.time_limit || 30,
+          position: q.position || 1,
+          created_at: q.created_at,
+        }
+      })
 
       setQuestions(formatted)
     } catch (err: unknown) {
@@ -95,20 +108,32 @@ export default function AdminQuestionsPage() {
         if (fetchErr) throw fetchErr
 
         const typedData = (data as DbQuestionRow[] | null) ?? []
-        const formatted: Question[] = typedData.map((q: DbQuestionRow) => ({
-          id: q.id,
-          question_text: q.question_text,
-          prompt: q.prompt,
-          think_twice_prompt: q.think_twice_prompt,
-          options: Array.isArray(q.options) ? (q.options as string[]) : [],
-          correct_option: q.correct_option,
-          explanation: q.explanation,
-          difficulty: q.difficulty,
-          category: q.category,
-          time_limit: q.time_limit,
-          position: q.position,
-          created_at: q.created_at,
-        }))
+        const formatted: Question[] = typedData.map((q: DbQuestionRow) => {
+          let opts: string[] = []
+          if (Array.isArray(q.options)) {
+            opts = q.options.map(String)
+          } else if (typeof q.options === 'string') {
+            try {
+              opts = JSON.parse(q.options)
+            } catch {
+              opts = []
+            }
+          }
+          return {
+            id: q.id,
+            question_text: q.question_text || q.prompt || 'Question',
+            prompt: q.prompt,
+            think_twice_prompt: q.think_twice_prompt,
+            options: opts,
+            correct_option: q.correct_option,
+            explanation: q.explanation,
+            difficulty: q.difficulty,
+            category: q.category,
+            time_limit: q.time_limit || 30,
+            position: q.position || 1,
+            created_at: q.created_at,
+          }
+        })
 
         setQuestions(formatted)
       } catch (err: unknown) {
@@ -126,7 +151,39 @@ export default function AdminQuestionsPage() {
     }
   }, [supabase])
 
-  async function handleCreateQuestion(e: FormEvent<HTMLFormElement>) {
+  function resetForm() {
+    setEditingQuestionId(null)
+    setQuestionText('')
+    setThinkTwicePrompt('Pause and reconsider your initial response. Are you certain?')
+    setOptionA('')
+    setOptionB('')
+    setOptionC('')
+    setOptionD('')
+    setCorrectOptionIndex('0')
+    setExplanation('')
+    setTimeLimit('30')
+    setPosition(String(questions.length + 1))
+  }
+
+  function startEditQuestion(q: Question) {
+    setEditingQuestionId(q.id)
+    setQuestionText(q.question_text)
+    setThinkTwicePrompt(q.think_twice_prompt || 'Pause and reconsider your initial response. Are you certain?')
+    setOptionA(q.options[0] || '')
+    setOptionB(q.options[1] || '')
+    setOptionC(q.options[2] || '')
+    setOptionD(q.options[3] || '')
+    
+    // Find index of correct option
+    const idx = q.options.findIndex(opt => opt.trim().toLowerCase() === q.correct_option.trim().toLowerCase())
+    setCorrectOptionIndex(idx >= 0 ? String(idx) : '0')
+    setExplanation(q.explanation || '')
+    setTimeLimit(String(q.time_limit || 30))
+    setPosition(String(q.position || 1))
+    setShowModal(true)
+  }
+
+  async function handleSaveQuestion(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError('')
     setSuccess('')
@@ -137,17 +194,11 @@ export default function AdminQuestionsPage() {
       return
     }
 
-    const selectedCorrectText =
-      correctOption === 'A'
-        ? optionA.trim()
-        : correctOption === 'B'
-        ? optionB.trim()
-        : correctOption === 'C'
-        ? optionC.trim()
-        : optionD.trim()
+    const idx = parseInt(correctOptionIndex, 10)
+    const selectedCorrectText = opts[idx] || opts[0]
 
     try {
-      const { error: insertErr } = await supabase.from('questions').insert({
+      const payload = {
         question_text: questionText.trim(),
         prompt: questionText.trim(),
         think_twice_prompt: thinkTwicePrompt.trim() || 'Pause and reconsider your initial response. Are you certain?',
@@ -155,19 +206,30 @@ export default function AdminQuestionsPage() {
         correct_option: selectedCorrectText,
         explanation: explanation.trim() || null,
         time_limit: parseInt(timeLimit, 10) || 30,
-        position: parseInt(position, 10) || questions.length + 1,
-      })
+        position: parseInt(position, 10) || 1,
+      }
 
-      if (insertErr) throw insertErr
+      if (editingQuestionId) {
+        // UPDATE existing question
+        const { error: updateErr } = await supabase
+          .from('questions')
+          .update(payload)
+          .eq('id', editingQuestionId)
 
-      setSuccess('Question added to database successfully.')
+        if (updateErr) throw updateErr
+        setSuccess('Question updated successfully.')
+      } else {
+        // INSERT new question
+        const { error: insertErr } = await supabase
+          .from('questions')
+          .insert(payload)
+
+        if (insertErr) throw insertErr
+        setSuccess('Question added to database successfully.')
+      }
+
       setShowModal(false)
-      setQuestionText('')
-      setOptionA('')
-      setOptionB('')
-      setOptionC('')
-      setOptionD('')
-      setExplanation('')
+      resetForm()
       await refreshQuestions()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save question.')
@@ -204,7 +266,7 @@ export default function AdminQuestionsPage() {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setShowModal(true)}
+            onClick={() => { resetForm(); setShowModal(true) }}
             className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-primary-foreground hover:opacity-90"
           >
             <Plus className="size-4" /> Add Question
@@ -233,12 +295,15 @@ export default function AdminQuestionsPage() {
             <h2 className="text-2xl font-black">{previewQuestion.question_text}</h2>
             <p className="text-xs text-muted-foreground italic font-mono">&quot;{previewQuestion.think_twice_prompt}&quot;</p>
             <div className="grid gap-2">
-              {previewQuestion.options.map((opt, i) => (
-                <div key={opt} className={`p-3 rounded-xl border flex items-center justify-between text-sm ${opt === previewQuestion.correct_option ? 'border-emerald-500 bg-emerald-500/10 font-bold text-emerald-600' : 'border-border bg-background'}`}>
-                  <span>{String.fromCharCode(65 + i)}. {opt}</span>
-                  {opt === previewQuestion.correct_option && <span className="text-xs font-mono font-bold uppercase">(Correct Answer)</span>}
-                </div>
-              ))}
+              {previewQuestion.options.map((opt, i) => {
+                const isCorrect = opt.trim().toLowerCase() === previewQuestion.correct_option.trim().toLowerCase()
+                return (
+                  <div key={opt} className={`p-3 rounded-xl border flex items-center justify-between text-sm ${isCorrect ? 'border-emerald-500 bg-emerald-500/10 font-bold text-emerald-600' : 'border-border bg-background'}`}>
+                    <span>{String.fromCharCode(65 + i)}. {opt}</span>
+                    {isCorrect && <span className="text-xs font-mono font-bold uppercase">(Correct Answer)</span>}
+                  </div>
+                )
+              })}
             </div>
             {previewQuestion.explanation && (
               <div className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">
@@ -249,12 +314,12 @@ export default function AdminQuestionsPage() {
         </div>
       )}
 
-      {/* Create Modal */}
+      {/* Create / Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="w-full max-w-xl rounded-3xl border border-border bg-card p-6 shadow-xl space-y-4 my-8">
-            <h2 className="text-2xl font-black">Add New Question</h2>
-            <form onSubmit={handleCreateQuestion} className="space-y-4">
+            <h2 className="text-2xl font-black">{editingQuestionId ? 'Edit Question' : 'Add New Question'}</h2>
+            <form onSubmit={handleSaveQuestion} className="space-y-4">
               <label className="flex flex-col gap-1 text-xs font-semibold">
                 Question Text
                 <input
@@ -278,31 +343,31 @@ export default function AdminQuestionsPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1 text-xs font-semibold">
-                  Option A
+                  Option A (Choice 1)
                   <input required value={optionA} onChange={(e) => setOptionA(e.target.value)} className="h-10 rounded-xl border border-input bg-background px-3 text-sm outline-none" />
                 </label>
                 <label className="flex flex-col gap-1 text-xs font-semibold">
-                  Option B
+                  Option B (Choice 2)
                   <input required value={optionB} onChange={(e) => setOptionB(e.target.value)} className="h-10 rounded-xl border border-input bg-background px-3 text-sm outline-none" />
                 </label>
                 <label className="flex flex-col gap-1 text-xs font-semibold">
-                  Option C
+                  Option C (Choice 3)
                   <input required value={optionC} onChange={(e) => setOptionC(e.target.value)} className="h-10 rounded-xl border border-input bg-background px-3 text-sm outline-none" />
                 </label>
                 <label className="flex flex-col gap-1 text-xs font-semibold">
-                  Option D
+                  Option D (Choice 4)
                   <input required value={optionD} onChange={(e) => setOptionD(e.target.value)} className="h-10 rounded-xl border border-input bg-background px-3 text-sm outline-none" />
                 </label>
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <label className="flex flex-col gap-1 text-xs font-semibold">
-                  Correct Choice
-                  <select value={correctOption} onChange={(e) => setCorrectOption(e.target.value)} className="h-10 rounded-xl border border-input bg-background px-3 text-sm outline-none">
-                    <option value="A">Option A</option>
-                    <option value="B">Option B</option>
-                    <option value="C">Option C</option>
-                    <option value="D">Option D</option>
+                  Correct Option
+                  <select value={correctOptionIndex} onChange={(e) => setCorrectOptionIndex(e.target.value)} className="h-10 rounded-xl border border-input bg-background px-3 text-sm outline-none">
+                    <option value="0">Option A: {optionA || '(Choice 1)'}</option>
+                    <option value="1">Option B: {optionB || '(Choice 2)'}</option>
+                    <option value="2">Option C: {optionC || '(Choice 3)'}</option>
+                    <option value="3">Option D: {optionD || '(Choice 4)'}</option>
                   </select>
                 </label>
                 <label className="flex flex-col gap-1 text-xs font-semibold">
@@ -321,11 +386,11 @@ export default function AdminQuestionsPage() {
               </label>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
-                <button type="button" onClick={() => setShowModal(false)} className="rounded-xl border border-border px-4 py-2 text-xs font-bold hover:bg-muted">
+                <button type="button" onClick={() => { setShowModal(false); resetForm() }} className="rounded-xl border border-border px-4 py-2 text-xs font-bold hover:bg-muted">
                   Cancel
                 </button>
                 <button type="submit" className="rounded-xl bg-primary px-5 py-2 text-xs font-bold text-primary-foreground hover:opacity-90">
-                  Save Question
+                  {editingQuestionId ? 'Update Question' : 'Save Question'}
                 </button>
               </div>
             </form>
@@ -354,12 +419,15 @@ export default function AdminQuestionsPage() {
                 </div>
                 <h3 className="font-bold text-lg">{q.question_text}</h3>
                 <p className="text-xs text-muted-foreground">Options: {q.options.join(', ')}</p>
-                <p className="text-xs text-emerald-600 font-bold">Correct: {q.correct_option}</p>
+                <p className="text-xs text-emerald-600 font-bold">Correct Answer: {q.correct_option}</p>
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
                 <button onClick={() => setPreviewQuestion(q)} className="flex items-center gap-1 rounded-xl border border-border px-3 py-2 text-xs font-bold hover:bg-muted">
                   <Eye className="size-3.5" /> Preview
+                </button>
+                <button onClick={() => startEditQuestion(q)} className="flex items-center gap-1 rounded-xl border border-border px-3 py-2 text-xs font-bold hover:bg-muted">
+                  <Edit3 className="size-3.5" /> Edit
                 </button>
                 <button onClick={() => void handleDeleteQuestion(q.id)} className="flex items-center gap-1 rounded-xl border border-destructive/30 text-destructive px-3 py-2 text-xs font-bold hover:bg-destructive/10">
                   <Trash2 className="size-3.5" /> Delete

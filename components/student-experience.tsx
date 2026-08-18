@@ -255,7 +255,7 @@ export function StudentExperience() {
           college: college.trim(),
           phone: phone.trim() || null,
           email: email.trim() || null,
-          house_id: houseId.startsWith('h-') ? null : houseId,
+          house_id: houseId,
         }),
       })
 
@@ -287,17 +287,92 @@ export function StudentExperience() {
     }
   }
 
-  // 4. Begin Competition (100% Admin-Controlled Questions from Supabase)
+  // 4. Begin Competition (Dynamic Admin Questions & Safe Session Initialization)
   async function beginCompetition() {
     if (!supabase || !player) return
     setSubmitting(true)
+    setRegError('')
 
     try {
-      // Fetch Admin-created questions from Supabase
-      const { data: dbQuestions } = await supabase
+      // 1. Resolve valid Competition UUID from Database
+      let activeCompId = competitionId
+
+      if (!activeCompId || activeCompId === 'default-competition' || !activeCompId.includes('-')) {
+        const { data: compRows } = await supabase
+          .from('competitions')
+          .select('id')
+          .order('created_at', { ascending: false })
+          .limit(1)
+
+        if (compRows && compRows.length > 0) {
+          activeCompId = compRows[0].id
+        } else {
+          const { data: newComp } = await supabase
+            .from('competitions')
+            .insert({
+              name: 'Think Twice College Championship',
+              status: 'LIVE',
+              duration: 1800,
+              difficulty: 'Medium',
+              category: 'General Knowledge',
+            })
+            .select('id')
+            .single()
+
+          if (newComp) activeCompId = newComp.id
+        }
+      }
+
+      if (activeCompId) setCompetitionId(activeCompId)
+
+      // 2. Fetch Admin-created questions from Supabase
+      let { data: dbQuestions } = await supabase
         .from('questions')
         .select('id, question_text, prompt, think_twice_prompt, options, correct_option, explanation, time_limit, position')
         .order('position', { ascending: true })
+
+      // Auto-seed starter questions if questions bank is completely empty
+      if (!dbQuestions || dbQuestions.length === 0) {
+        const starterQuestions = [
+          {
+            question_text: 'Which planet in our solar system has the most moons?',
+            prompt: 'Which planet in our solar system has the most moons?',
+            think_twice_prompt: 'You might remember Jupiter, but recent astronomical discoveries updated Saturn\'s total count. Are you sure?',
+            options: ['Jupiter', 'Saturn', 'Neptune', 'Uranus'],
+            correct_option: 'Saturn',
+            explanation: 'Saturn has 146 confirmed moons, surpassing Jupiter\'s 95 moons as of recent astronomical surveys.',
+            time_limit: 30,
+            position: 1,
+          },
+          {
+            question_text: 'What is the speed of light in vacuum approximately?',
+            prompt: 'What is the speed of light in vacuum approximately?',
+            think_twice_prompt: 'Consider whether the value is in kilometers per second (km/s) or meters per second (m/s)!',
+            options: ['300,000 km/s', '150,000 km/s', '3,000,000 km/s', '30,000 km/s'],
+            correct_option: '300,000 km/s',
+            explanation: 'Light travels at approximately 299,792,458 meters per second, which rounds to 300,000 km/s.',
+            time_limit: 30,
+            position: 2,
+          },
+          {
+            question_text: 'Which chemical element has the chemical symbol "Fe"?',
+            prompt: 'Which chemical element has the chemical symbol "Fe"?',
+            think_twice_prompt: 'The symbol "Fe" comes from its Latin name Ferrum. Are you confident in your choice?',
+            options: ['Iron', 'Fluorine', 'Francium', 'Fermium'],
+            correct_option: 'Iron',
+            explanation: 'Iron comes from the Latin word "Ferrum", giving it the chemical symbol Fe.',
+            time_limit: 30,
+            position: 3,
+          },
+        ]
+
+        const { data: insertedQuestions } = await supabase
+          .from('questions')
+          .insert(starterQuestions)
+          .select('id, question_text, prompt, think_twice_prompt, options, correct_option, explanation, time_limit, position')
+
+        if (insertedQuestions) dbQuestions = insertedQuestions
+      }
 
       const loadedQuestions: Question[] = (dbQuestions && dbQuestions.length > 0)
         ? dbQuestions.map((q: Partial<Question> & { options: unknown }) => {
@@ -329,28 +404,40 @@ export function StudentExperience() {
       setQuestions(loadedQuestions)
 
       if (loadedQuestions.length === 0) {
-        setRegError('No questions have been published by the Admin for this competition yet. Please contact the Admin.')
+        setRegError('No questions available right now. Please ask the Admin to add questions.')
         return
       }
 
-      const compId = competitionId || 'default-competition'
+      // 3. Create or Fetch Game Session with valid UUIDs
       let session = gameSession
 
-      if (!session) {
-        const { data: newSession } = await supabase
+      if (!session && activeCompId) {
+        const { data: existingSession } = await supabase
           .from('game_sessions')
-          .insert({
-            player_id: player.id,
-            competition_id: compId,
-            current_question: 1,
-            status: 'IN_PROGRESS',
-            started_at: new Date().toISOString(),
-            question_started_at: new Date().toISOString(),
-          })
           .select('*')
-          .single()
+          .eq('player_id', player.id)
+          .eq('competition_id', activeCompId)
+          .maybeSingle()
 
-        if (newSession) session = newSession as GameSession
+        if (existingSession) {
+          session = existingSession as GameSession
+        } else {
+          const { data: newSession, error: sessionErr } = await supabase
+            .from('game_sessions')
+            .insert({
+              player_id: player.id,
+              competition_id: activeCompId,
+              current_question: 1,
+              status: 'IN_PROGRESS',
+              started_at: new Date().toISOString(),
+              question_started_at: new Date().toISOString(),
+            })
+            .select('*')
+            .single()
+
+          if (sessionErr) console.error('Session creation warning:', sessionErr)
+          if (newSession) session = newSession as GameSession
+        }
       }
 
       setGameSession(session)
@@ -361,6 +448,7 @@ export function StudentExperience() {
       setPhase('question')
     } catch (err: unknown) {
       console.error('Error starting competition:', err)
+      setRegError(err instanceof Error ? err.message : 'Could not launch live competition.')
     } finally {
       setSubmitting(false)
     }
@@ -580,6 +668,8 @@ export function StudentExperience() {
                 </strong>
               </p>
             </div>
+
+            {regError && <div className="rounded-xl bg-destructive/10 p-3 text-xs font-bold text-destructive max-w-md w-full">{regError}</div>}
 
             <button
               onClick={beginCompetition}

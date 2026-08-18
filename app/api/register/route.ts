@@ -22,6 +22,38 @@ export async function POST(req: NextRequest) {
 
     const supabase = await createClient()
 
+    // 1. Resolve real House UUID from database
+    let targetHouseId: string | null = null
+
+    if (house_id && typeof house_id === 'string' && house_id.trim()) {
+      const cleanHouse = house_id.trim()
+      // Try matching by UUID or house name (AGNI, BHUMI, VAYU, JAL, AKASH)
+      const { data: matchedHouse } = await supabase
+        .from('houses')
+        .select('id')
+        .or(`id.eq.${cleanHouse},name.eq.${cleanHouse.toUpperCase()}`)
+        .maybeSingle()
+
+      if (matchedHouse) {
+        targetHouseId = matchedHouse.id
+      }
+    }
+
+    // Fallback: If no house ID matched, pick the first house (AGNI) or auto-assign
+    if (!targetHouseId) {
+      const { data: defaultHouse } = await supabase
+        .from('houses')
+        .select('id')
+        .order('name')
+        .limit(1)
+        .maybeSingle()
+
+      if (defaultHouse) {
+        targetHouseId = defaultHouse.id
+      }
+    }
+
+    // 2. Insert Player into DB with guaranteed house_id and status
     const { data, error: insertError } = await supabase
       .from('players')
       .insert({
@@ -29,17 +61,18 @@ export async function POST(req: NextRequest) {
         college: college.trim(),
         phone: phone?.trim() || null,
         email: email?.trim() || null,
-        house_id: house_id && !house_id.startsWith('h-') ? house_id : null,
+        house_id: targetHouseId,
         status: 'active',
       })
       .select('id, player_code, player_token, name, college, house_id, status')
       .single()
 
     if (insertError || !data) {
+      console.error('Player insert error:', insertError)
       return NextResponse.json({ error: insertError?.message || 'Registration failed.' }, { status: 500 })
     }
 
-    // Build response with HttpOnly, Secure, SameSite=Lax cookies
+    // 3. Build response with HttpOnly, Secure, SameSite=Lax cookies
     const response = NextResponse.json({
       id: data.id,
       player_code: data.player_code,
@@ -47,7 +80,6 @@ export async function POST(req: NextRequest) {
       college: data.college,
       house_id: data.house_id,
       status: data.status,
-      // Do NOT return player_token in the JSON body
     })
 
     const isProduction = process.env.NODE_ENV === 'production'
