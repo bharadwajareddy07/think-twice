@@ -492,34 +492,33 @@ BEGIN
 END $$;
 
 CREATE POLICY houses_select_policy ON public.houses FOR SELECT USING (true);
-CREATE POLICY houses_admin_policy ON public.houses FOR ALL USING (public.is_admin_or_operator(auth.uid()));
+CREATE POLICY houses_all_policy ON public.houses FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY admin_roles_select ON public.admin_roles FOR SELECT USING (user_id = auth.uid());
-CREATE POLICY admin_roles_admin ON public.admin_roles FOR ALL USING (user_id = auth.uid());
+CREATE POLICY admin_roles_select ON public.admin_roles FOR SELECT USING (true);
+CREATE POLICY admin_roles_all ON public.admin_roles FOR ALL USING (true) WITH CHECK (true);
 
 CREATE POLICY players_select ON public.players FOR SELECT USING (true);
 CREATE POLICY players_insert ON public.players FOR INSERT WITH CHECK (true);
-CREATE POLICY players_admin_update ON public.players FOR UPDATE USING (public.is_admin_or_operator(auth.uid()));
-CREATE POLICY players_admin_delete ON public.players FOR DELETE USING (public.is_admin_or_operator(auth.uid()));
+CREATE POLICY players_update ON public.players FOR UPDATE USING (true);
+CREATE POLICY players_delete ON public.players FOR DELETE USING (true);
 
 CREATE POLICY competitions_select ON public.competitions FOR SELECT USING (true);
-CREATE POLICY competitions_admin ON public.competitions FOR ALL USING (public.is_admin_or_operator(auth.uid()));
+CREATE POLICY competitions_all ON public.competitions FOR ALL USING (true) WITH CHECK (true);
 
 CREATE POLICY questions_select ON public.questions FOR SELECT USING (true);
-CREATE POLICY questions_admin ON public.questions FOR ALL USING (public.is_admin_or_operator(auth.uid()));
+CREATE POLICY questions_all ON public.questions FOR ALL USING (true) WITH CHECK (true);
 
 CREATE POLICY comp_questions_select ON public.competition_questions FOR SELECT USING (true);
-CREATE POLICY comp_questions_admin ON public.competition_questions FOR ALL USING (public.is_admin_or_operator(auth.uid()));
+CREATE POLICY comp_questions_all ON public.competition_questions FOR ALL USING (true) WITH CHECK (true);
 
 CREATE POLICY game_sessions_select ON public.game_sessions FOR SELECT USING (true);
-CREATE POLICY game_sessions_insert ON public.game_sessions FOR INSERT WITH CHECK (true);
-CREATE POLICY game_sessions_admin ON public.game_sessions FOR ALL USING (public.is_admin_or_operator(auth.uid()));
+CREATE POLICY game_sessions_all ON public.game_sessions FOR ALL USING (true) WITH CHECK (true);
 
 CREATE POLICY answers_select ON public.answers FOR SELECT USING (true);
-CREATE POLICY answers_admin ON public.answers FOR ALL USING (public.is_admin_or_operator(auth.uid()));
+CREATE POLICY answers_all ON public.answers FOR ALL USING (true) WITH CHECK (true);
 
 CREATE POLICY results_select ON public.results FOR SELECT USING (true);
-CREATE POLICY results_admin ON public.results FOR ALL USING (public.is_admin_or_operator(auth.uid()));
+CREATE POLICY results_all ON public.results FOR ALL USING (true) WITH CHECK (true);
 
 -- Reload PostgREST schema cache
 NOTIFY pgrst, 'reload schema';

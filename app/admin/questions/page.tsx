@@ -235,7 +235,14 @@ export default function AdminQuestionsPage() {
       resetForm()
       await refreshQuestions()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to save question.')
+      console.error('Error saving question:', err)
+      let msg = 'Failed to save question.'
+      if (err instanceof Error) {
+        msg = err.message
+      } else if (typeof err === 'object' && err !== null && 'message' in err) {
+        msg = String((err as { message: string }).message)
+      }
+      setError(msg)
     }
   }
 
