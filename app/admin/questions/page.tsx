@@ -175,7 +175,10 @@ export default function AdminQuestionsPage() {
     setOptionD(q.options[3] || '')
     
     // Find index of correct option
-    const idx = q.options.findIndex(opt => opt.trim().toLowerCase() === q.correct_option.trim().toLowerCase())
+    const correctOption = q.correct_option ?? ''
+    const idx = q.options.findIndex(
+      opt => opt.trim().toLowerCase() === correctOption.trim().toLowerCase()
+    )
     setCorrectOptionIndex(idx >= 0 ? String(idx) : '0')
     setExplanation(q.explanation || '')
     setTimeLimit(String(q.time_limit || 30))
@@ -285,34 +288,37 @@ export default function AdminQuestionsPage() {
       {success && <div className="rounded-xl bg-emerald-500/10 p-4 text-sm font-semibold text-emerald-600">{success}</div>}
 
       {/* Preview Modal */}
-      {previewQuestion && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-xl rounded-3xl border border-border bg-card p-6 shadow-xl space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-xs font-bold text-primary uppercase">Question Preview</span>
-              <button onClick={() => setPreviewQuestion(null)} className="text-xs font-bold text-muted-foreground hover:text-foreground">Close</button>
-            </div>
-            <h2 className="text-2xl font-black">{previewQuestion.question_text}</h2>
-            <p className="text-xs text-muted-foreground italic font-mono">&quot;{previewQuestion.think_twice_prompt}&quot;</p>
-            <div className="grid gap-2">
-              {previewQuestion.options.map((opt, i) => {
-                const isCorrect = opt.trim().toLowerCase() === previewQuestion.correct_option.trim().toLowerCase()
-                return (
-                  <div key={opt} className={`p-3 rounded-xl border flex items-center justify-between text-sm ${isCorrect ? 'border-emerald-500 bg-emerald-500/10 font-bold text-emerald-600' : 'border-border bg-background'}`}>
-                    <span>{String.fromCharCode(65 + i)}. {opt}</span>
-                    {isCorrect && <span className="text-xs font-mono font-bold uppercase">(Correct Answer)</span>}
-                  </div>
-                )
-              })}
-            </div>
-            {previewQuestion.explanation && (
-              <div className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">
-                <strong className="text-foreground">Explanation:</strong> {previewQuestion.explanation}
+      {previewQuestion && (() => {
+        const correctOption = previewQuestion.correct_option ?? ''
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+            <div className="w-full max-w-xl rounded-3xl border border-border bg-card p-6 shadow-xl space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs font-bold text-primary uppercase">Question Preview</span>
+                <button onClick={() => setPreviewQuestion(null)} className="text-xs font-bold text-muted-foreground hover:text-foreground">Close</button>
               </div>
-            )}
+              <h2 className="text-2xl font-black">{previewQuestion.question_text}</h2>
+              <p className="text-xs text-muted-foreground italic font-mono">&quot;{previewQuestion.think_twice_prompt}&quot;</p>
+              <div className="grid gap-2">
+                {previewQuestion.options.map((opt, i) => {
+                  const isCorrect = opt.trim().toLowerCase() === correctOption.trim().toLowerCase()
+                  return (
+                    <div key={opt} className={`p-3 rounded-xl border flex items-center justify-between text-sm ${isCorrect ? 'border-emerald-500 bg-emerald-500/10 font-bold text-emerald-600' : 'border-border bg-background'}`}>
+                      <span>{String.fromCharCode(65 + i)}. {opt}</span>
+                      {isCorrect && <span className="text-xs font-mono font-bold uppercase">(Correct Answer)</span>}
+                    </div>
+                  )
+                })}
+              </div>
+              {previewQuestion.explanation && (
+                <div className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">
+                  <strong className="text-foreground">Explanation:</strong> {previewQuestion.explanation}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Create / Edit Modal */}
       {showModal && (
