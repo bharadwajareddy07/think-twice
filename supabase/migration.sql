@@ -119,6 +119,16 @@ ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS time_limit INT DEFAULT 30;
 ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS position INT DEFAULT 1;
 ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = 'questions' AND column_name = 'competition_id'
+    ) THEN
+        ALTER TABLE public.questions ALTER COLUMN competition_id DROP NOT NULL;
+    END IF;
+END $$;
+
 -- 1f. Competition Questions Junction Table
 CREATE TABLE IF NOT EXISTS public.competition_questions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

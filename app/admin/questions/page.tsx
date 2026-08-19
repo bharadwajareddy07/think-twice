@@ -45,6 +45,9 @@ export default function AdminQuestionsPage() {
   const [timeLimit, setTimeLimit] = useState('30')
   const [position, setPosition] = useState('1')
 
+  const [competitions, setCompetitions] = useState<{ id: string; name: string }[]>([])
+  const [selectedCompetitionId, setSelectedCompetitionId] = useState<string>('')
+
   const supabase = createClient()
 
   async function refreshQuestions() {
@@ -135,6 +138,17 @@ export default function AdminQuestionsPage() {
           }
         })
 
+        // Fetch competitions for dropdown / assignment
+        const { data: compData } = await supabase
+          .from('competitions')
+          .select('id, name')
+          .order('created_at', { ascending: false })
+
+        if (compData && compData.length > 0) {
+          setCompetitions(compData)
+          setSelectedCompetitionId(compData[0].id)
+        }
+
         setQuestions(formatted)
       } catch (err: unknown) {
         if (!active) return
@@ -201,7 +215,7 @@ export default function AdminQuestionsPage() {
     const selectedCorrectText = opts[idx] || opts[0]
 
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         question_text: questionText.trim(),
         prompt: questionText.trim(),
         think_twice_prompt: thinkTwicePrompt.trim() || 'Pause and reconsider your initial response. Are you certain?',
@@ -210,6 +224,10 @@ export default function AdminQuestionsPage() {
         explanation: explanation.trim() || null,
         time_limit: parseInt(timeLimit, 10) || 30,
         position: parseInt(position, 10) || 1,
+      }
+
+      if (selectedCompetitionId) {
+        payload.competition_id = selectedCompetitionId
       }
 
       if (editingQuestionId) {
@@ -343,6 +361,23 @@ export default function AdminQuestionsPage() {
                   className="h-11 rounded-xl border border-input bg-background px-3 text-sm outline-none"
                 />
               </label>
+
+              {competitions.length > 0 && (
+                <label className="flex flex-col gap-1 text-xs font-semibold">
+                  Target Competition
+                  <select
+                    value={selectedCompetitionId}
+                    onChange={(e) => setSelectedCompetitionId(e.target.value)}
+                    className="h-10 rounded-xl border border-input bg-background px-3 text-sm outline-none"
+                  >
+                    {competitions.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
 
               <label className="flex flex-col gap-1 text-xs font-semibold">
                 Think Twice Reflection Prompt
